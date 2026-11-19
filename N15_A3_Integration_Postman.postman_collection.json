@@ -1,0 +1,612 @@
+{
+  "info": {
+    "_postman_id": "5e304e50-a315-4c26-b929-15c0a3000012",
+    "name": "Nhóm 15 - A3 Integration Test - Healthcare System",
+    "description": "12 kịch bản Integration Test phần A.3. Chạy theo thứ tự. Điều kiện: Docker services đang Up và có dữ liệu availability. Khuyến nghị chạy seed-hms-demo.ps1 trước collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "IT-01 - Login thành công (Patient)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{patient_email}}\",\n  \"password\": \"{{patient_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-01: HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "const token = j?.userLoginDetails?.token || j?.token || j?.accessToken;",
+              "pm.test(\"IT-01: Có JWT token\", function () { pm.expect(token).to.be.ok; });",
+              "if (token) pm.environment.set(\"token\", token);",
+              "",
+              "// Lấy patientId cho các case booking tiếp theo.",
+              "if (token) {",
+              "  pm.sendRequest({",
+              "    url: pm.environment.get(\"base_url\") + \"/patients/profile\",",
+              "    method: \"GET\",",
+              "    header: { Authorization: \"Bearer \" + token }",
+              "  }, function (err, res) {",
+              "    if (!err && res.code === 200) {",
+              "      const p = res.json();",
+              "      if (p?.patientId) pm.environment.set(\"patient_id\", p.patientId);",
+              "    }",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-02 - Login sai mật khẩu",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{patient_email}}\",\n  \"password\": \"SaiMatKhau@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-02: Hệ thống từ chối đăng nhập\", function () {",
+              "  pm.expect([400, 401]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-03 - Login email không tồn tại",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"not-exist-a3@hsm.test\",\n  \"password\": \"Test@123456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-03: Không trả token cho email không tồn tại\", function () {",
+              "  pm.expect([401, 404]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-04 - API bảo vệ không gửi token",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/appointments/get/all/availability/appointment",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "get",
+            "all",
+            "availability",
+            "appointment"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-04: Không token bị từ chối\", function () {",
+              "  pm.response.to.have.status(401);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-05 - API với token sai",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer abc.invalid.token",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/get/all/availability/appointment",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "get",
+            "all",
+            "availability",
+            "appointment"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-05: Token sai bị từ chối\", function () {",
+              "  pm.response.to.have.status(401);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-06 - Lấy danh sách slot trống (có JWT)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/get/all/availability/appointment",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "get",
+            "all",
+            "availability",
+            "appointment"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-06: HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const arr = pm.response.json();",
+              "pm.test(\"IT-06: Response là danh sách và có slot để test booking\", function () {",
+              "  pm.expect(arr).to.be.an(\"array\");",
+              "  pm.expect(arr.length).to.be.above(0);",
+              "});",
+              "if (Array.isArray(arr) && arr.length > 0) {",
+              "  pm.environment.set(\"availability_id\", arr[0].availabilityId);",
+              "  pm.environment.set(\"doctor_id\", arr[0].doctorId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-07 - Lấy thông tin bác sĩ theo ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/doctors/id/{{doctor_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "doctors",
+            "id",
+            "{{doctor_id}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-07: HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "pm.test(\"IT-07: Có thông tin bác sĩ\", function () {",
+              "  pm.expect(j).to.be.an(\"object\");",
+              "  pm.expect(j.doctorId || j.firstName || j.lastName).to.exist;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-08 - Đặt lịch thành công",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/book",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "book"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"availabilityId\": \"{{availability_id}}\",\n  \"patientId\": \"{{patient_id}}\",\n  \"appointmentType\": \"In-Person\",\n  \"appointmentStatus\": \"Booked\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-08: Booking thành công\", function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-09 - Đặt lịch trùng slot (double booking)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/book",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "book"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"availabilityId\": \"{{availability_id}}\",\n  \"patientId\": \"{{patient_id}}\",\n  \"appointmentType\": \"In-Person\",\n  \"appointmentStatus\": \"Booked\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-09: Booking trùng bị từ chối\", function () {",
+              "  // Source hiện tại có thể trả 404 khi slot đã chuyển isAvailable=false;",
+              "  // các implementation khác thường trả 400/409.",
+              "  pm.expect([400, 404, 409]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-10 - Đặt lịch thiếu field bắt buộc",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/book",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "book"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"availabilityId\": \"{{availability_id}}\",\n  \"appointmentType\": \"In-Person\",\n  \"appointmentStatus\": \"Booked\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-10: Request thiếu patientId bị từ chối\", function () {",
+              "  pm.expect(pm.response.code).to.be.within(400, 499);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-11 - Patient gọi endpoint nghiệp vụ Doctor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/appointments/create",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "appointments",
+            "create"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"date\": \"2030-12-20\",\n  \"startTime\": \"15:00\",\n  \"endTime\": \"16:00\",\n  \"perPatientTimeInMinutes\": 30\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-11: Patient không được tạo availability của Doctor\", function () {",
+              "  // A.3 kỳ vọng 403 nếu gateway/service enforce role.",
+              "  pm.response.to.have.status(403);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "IT-12 - Luồng Login → Xem slot → Book",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{patient_email}}\",\n  \"password\": \"{{patient_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"IT-12 bước 1: Login HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const login = pm.response.json();",
+              "const token = login?.userLoginDetails?.token || login?.token || login?.accessToken;",
+              "pm.expect(token, \"JWT token\").to.be.ok;",
+              "const base = pm.environment.get(\"base_url\");",
+              "const patientId = pm.environment.get(\"patient_id\");",
+              "",
+              "pm.sendRequest({",
+              "  url: base + \"/appointments/get/all/availability/appointment\",",
+              "  method: \"GET\",",
+              "  header: { Authorization: \"Bearer \" + token }",
+              "}, function (err, res) {",
+              "  pm.test(\"IT-12 bước 2: GET availability HTTP 200\", function () {",
+              "    pm.expect(err).to.equal(null);",
+              "    pm.expect(res.code).to.equal(200);",
+              "  });",
+              "  if (err || res.code !== 200) return;",
+              "  const arr = res.json();",
+              "  pm.test(\"IT-12 bước 2: Có slot còn trống\", function () {",
+              "    pm.expect(arr).to.be.an(\"array\");",
+              "    pm.expect(arr.length).to.be.above(0);",
+              "  });",
+              "  if (!Array.isArray(arr) || arr.length === 0 || !patientId) return;",
+              "  const availabilityId = arr[0].availabilityId;",
+              "  pm.sendRequest({",
+              "    url: base + \"/appointments/book\",",
+              "    method: \"POST\",",
+              "    header: {",
+              "      Authorization: \"Bearer \" + token,",
+              "      \"Content-Type\": \"application/json\"",
+              "    },",
+              "    body: {",
+              "      mode: \"raw\",",
+              "      raw: JSON.stringify({",
+              "        availabilityId: availabilityId,",
+              "        patientId: patientId,",
+              "        appointmentType: \"In-Person\",",
+              "        appointmentStatus: \"Booked\"",
+              "      })",
+              "    }",
+              "  }, function (err2, res2) {",
+              "    pm.test(\"IT-12 bước 3: POST book thành công\", function () {",
+              "      pm.expect(err2).to.equal(null);",
+              "      pm.expect([200, 201]).to.include(res2.code);",
+              "    });",
+              "  });",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": []
+}
